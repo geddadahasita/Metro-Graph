@@ -2,7 +2,6 @@ import com.google.gson.*;
 import java.net.*;
 import java.util.*;
 
-//update GitHub
 /*
  * NEXT STEPS:
  *  -implement MetroEdge
@@ -28,15 +27,15 @@ public class MetroGraph {
 		private MetroNode silverPrev;
 		private MetroNode silverNext;
 
-        public MetroNode(String station) {
-            this.station = station;
+		public MetroNode(String station) {
+			this.station = station;
 			
-        }
+		}
 
 		public String toString() {
 			return station;
 		}
-    }
+	}
 
 	private static final String WMATA_API_KEY = "58dc2560ab8e4627854e8b8c93526816";
 
@@ -55,9 +54,8 @@ public class MetroGraph {
 	private ArrayList<String> silver = new ArrayList<>();
 
 	/**
-	 * ACTUAL MAP FOR GRAPH
+	 * MAIN MAP FOR GRAPH
 	 */
-	//list of all MetroNodes - INCLUDES DUPLICATES 
 	private ArrayList<MetroNode> metroNodeList = new ArrayList<>();
 	//undirected graph of MetroNodes
 	private Map<MetroNode, LinkedList<MetroNode>> metroMap = new LinkedHashMap<>();
