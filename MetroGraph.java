@@ -1,71 +1,88 @@
-import com.google.gson.*;
 import java.net.*;
 import java.util.*;
+import com.google.gson.*;
 
 /*
  * NEXT STEPS:
- *  -implement MetroEdge
- *  -implement pathBetweenStations functions for same line (straightforward) and different line (fastest with Djikstra's Algorithm)
- */
+ * better names for objects and variables.
+ * implement Djikstra's Algorithm to find shortest path between two stations BASED ON TIME - need to put time between stations as "weight" for edges.
+ * can also add fares as another way to weight graphs
+*/
 /**
- * Class that retrieves and stores all Metro Stations and categorizes them by
- * line color.
+ * MetroGraph class.
  */
 public class MetroGraph {
-	private class MetroNode {
-		private String station;
-		private MetroNode redPrev;
-		private MetroNode redNext;
-		private MetroNode bluePrev;
-		private MetroNode blueNext;
-		private MetroNode yellowPrev;
-		private MetroNode yellowNext;
-		private MetroNode orangePrev;
-		private MetroNode orangeNext;
-		private MetroNode greenPrev;
-		private MetroNode greenNext;
-		private MetroNode silverPrev;
-		private MetroNode silverNext;
+	/**
+	 * API key.
+	 */
+	private static final String WMATA_API_KEY = "58dc2560ab8e4627854e8b8c93526816";
 
-		public MetroNode(String station) {
-			this.station = station;
-			
-		}
+	/**
+	 * List of all MetroNodes - contains duplicates to account for stations with
+	 * multiple lines.
+	 */
+	private LinkedList<MetroNode> stationList;
 
-		public String toString() {
-			return station;
+	/**
+	 * Hashmap that maps stations to indices of adjacency matrix.
+	 */
+	private Map<MetroNode, Integer> stationIndices;
+
+	/**
+	 * Global index variable for station indicies map.
+	 */
+	int index;
+
+	/**
+	 * Lists for each line.
+	 */
+	private LinkedList<String> red = new LinkedList<>();
+	private LinkedList<String> blue = new LinkedList<>();
+	private LinkedList<String> yellow = new LinkedList<>();
+	private LinkedList<String> orange = new LinkedList<>();
+	private LinkedList<String> green = new LinkedList<>();
+	private LinkedList<String> silver = new LinkedList<>();
+
+	/**
+	 * MAIN MAP FOR GRAPH.
+	 * Directed weighted graph of MetroNodes as an adjacency matrix.
+	 */
+	private int[][] adjacencyMatrix;
+	//convert to MetroEdge 
+
+	/**
+	 * MetroGraph constructor
+	 */
+	public MetroGraph() {
+		stationList = new LinkedList<>();
+		stationIndices = new LinkedHashMap<>();
+		index = 0;
+
+		red = new LinkedList<>();
+		blue = new LinkedList<>();
+		yellow = new LinkedList<>();
+		orange = new LinkedList<>();
+		green = new LinkedList<>();
+		silver = new LinkedList<>();
+	}
+
+	public void createMetroNode(String name, String color, String code) {
+		//exclude incorect yellow stations
+		if (!((name.equals("Shaw-Howard U")
+				|| name.equals("U Street/African-Amer Civil War Memorial/Cardozo")
+				|| name.equals("Columbia Heights") || name.equals("Georgia Ave-Petworth")
+				|| name.equals("Fort Totten")) && color.equals("YL"))) {
+			MetroNode node = new MetroNode(name, color, code, new LinkedList<>());
+			stationList.add(node);
+			stationIndices.put(node, index);
+			index++;
 		}
 	}
 
-	private static final String WMATA_API_KEY = "58dc2560ab8e4627854e8b8c93526816";
-
-	
-	// unsorted list of all stations 
-	private ArrayList<String> stations = new ArrayList<>();
-	// unsorted map of station names and their respective line color
-	private Map<String, ArrayList<String>> lineMap = new LinkedHashMap<>();
-
-	// sorted lists for each line
-	private ArrayList<String> red = new ArrayList<>();
-	private ArrayList<String> blue = new ArrayList<>();
-	private ArrayList<String> yellow = new ArrayList<>();
-	private ArrayList<String> orange = new ArrayList<>();
-	private ArrayList<String> green = new ArrayList<>();
-	private ArrayList<String> silver = new ArrayList<>();
-
 	/**
-	 * MAIN MAP FOR GRAPH
+	 * API call to obtain stations and build metro node list and station indicies
+	 * map.
 	 */
-	private ArrayList<MetroNode> metroNodeList = new ArrayList<>();
-	//undirected graph of MetroNodes
-	private Map<MetroNode, LinkedList<MetroNode>> metroMap = new LinkedHashMap<>();
-
-	public MetroGraph() {
-		retrieveStations();
-		createStationLists();
-		sortStationLists();
-		createMetroGraph();//combine these two?
-	} 
 	public void retrieveStations() {
 		try {
 			String wmataURL = "https://api.wmata.com/Rail.svc/json/jStations";
@@ -73,7 +90,6 @@ public class MetroGraph {
 
 			HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 			connection.setRequestMethod("GET");
-			connection.connect();
 
 			int statusCode = connection.getResponseCode();
 
@@ -91,34 +107,26 @@ public class MetroGraph {
 				JsonParser parser = new JsonParser();
 				JsonObject object = (JsonObject) parser.parse(sb.toString());
 				JsonArray stationsArray = object.getAsJsonArray("Stations");
+
 				JsonObject obj;
-				String name, color;
-				ArrayList<String> colors;
+				String tempName, tempColor, tempCode;
 
 				for (int i = 0; i < stationsArray.size(); i++) {
 					obj = stationsArray.get(i).getAsJsonObject();
-					name = obj.get("Name").getAsString();
-					colors = new ArrayList<>();
-					colors.add(obj.get("LineCode1").getAsString());
+					tempName = obj.get("Name").getAsString();
+					tempColor = obj.get("LineCode1").getAsString();
+					tempCode = obj.get("Code").getAsString();
+
+					createMetroNode(tempName, tempColor, tempCode);
 
 					if (!obj.get("LineCode2").isJsonNull()) {
-						colors.add(obj.get("LineCode2").getAsString());
-					}
-					if (!obj.get("LineCode3").isJsonNull()) {
-						colors.add(obj.get("LineCode3").getAsString());
+						tempColor = obj.get("LineCode2").getAsString();
+						createMetroNode(tempName, tempColor, tempCode);
 					}
 
-					if (!lineMap.containsKey(name)) {
-						stations.add(name);
-						lineMap.put(name, colors);
-					}
-					else {
-						for (int j = 0; j < colors.size(); j++) {
-							color = colors.get(j);
-							if (!lineMap.get(name).contains(color)) {
-								lineMap.get(name).add(color);
-							}
-						}
+					if (!obj.get("LineCode3").isJsonNull()) {
+						tempColor = obj.get("LineCode3").getAsString();
+						createMetroNode(tempName, tempColor, tempCode);
 					}
 				}
 			} else {
@@ -129,38 +137,40 @@ public class MetroGraph {
 			e.printStackTrace();
 		}
 	}
-	
+
 	public void createStationLists() {
-		ArrayList<String> tempColors; 
+		MetroNode tempNode;
 		String tempName;
+		String tempLine;
 
-		for (int i = 0; i < stations.size(); i++) {
-			tempName = stations.get(i);
-			tempColors = lineMap.get(tempName);
+		for (int i = 0; i < stationList.size(); i++) {
+			tempNode = stationList.get(i);
+			tempName = tempNode.getName();
+			tempLine = tempNode.getLine();
 
-			if (tempColors.contains("RD")) {
+			if (tempLine.equals("RD")) {
 				red.add(tempName);
 			}
-			if (tempColors.contains("BL")) {
+			if (tempLine.equals("BL")) {
 				blue.add(tempName);
 			}
-			if (tempColors.contains("YL")) {
+			if (tempLine.equals("YL")) {
 				yellow.add(tempName);
 			}
-			if (tempColors.contains("OR")) {
+			if (tempLine.equals("OR")) {
 				orange.add(tempName);
 			}
-			if (tempColors.contains("GR")) {
+			if (tempLine.equals("GR")) {
 				green.add(tempName);
 			}
-			if (tempColors.contains("SV")) {
+			if (tempLine.equals("SV")) {
 				silver.add(tempName);
 			}
 		}
 	}
 
 	private void sortRed() {
-		ArrayList<String> tempRed = new ArrayList<>();
+		LinkedList<String> tempRed = new LinkedList<>();
 		int x = red.indexOf("Shady Grove");
 
 		for (int i = x; i >= 0; i--) {
@@ -183,8 +193,7 @@ public class MetroGraph {
 	}
 
 	private void sortBlue() {
-		ArrayList<String> tempBlue = new ArrayList<>();
-
+		LinkedList<String> tempBlue = new LinkedList<>();
 		tempBlue.add(blue.get(blue.size() - 1));
 		tempBlue.add(blue.get(blue.size() - 2));
 
@@ -204,7 +213,7 @@ public class MetroGraph {
 	}
 
 	private void sortYellow() {
-		ArrayList<String> tempYellow = new ArrayList<>();
+		LinkedList<String> tempYellow = new LinkedList<>();
 		int x = yellow.indexOf("Pentagon");
 		int y = yellow.indexOf("Huntington");
 
@@ -215,20 +224,13 @@ public class MetroGraph {
 		tempYellow.add("L'Enfant Plaza");
 		tempYellow.add("Archives-Navy Memorial-Penn Quarter");
 		tempYellow.add("Gallery Pl-Chinatown");
-
-		x = yellow.indexOf("Mt Vernon Sq 7th St-Convention Center");
-
-		for (int i = x; i < x + 5; i++) {
-			tempYellow.add(yellow.get(i));
-		}
-
-		tempYellow.add("Fort Totten");
+		tempYellow.add("Mt Vernon Sq 7th St-Convention Center");
 
 		yellow = tempYellow;
 	}
 
 	private void sortOrange() {
-		ArrayList<String> tempOrange = new ArrayList<>();
+		LinkedList<String> tempOrange = new LinkedList<>();
 		int x = orange.indexOf("Court House");
 
 		for (int i = orange.size() - 1; i >= x; i--) {
@@ -251,7 +253,7 @@ public class MetroGraph {
 	}
 
 	private void sortGreen() {
-		ArrayList<String> tempGreen = new ArrayList<>();
+		LinkedList<String> tempGreen = new LinkedList<>();
 		int x = green.indexOf("Waterfront");
 
 		for (int i = green.size() - 1; i >= x; i--) {
@@ -281,7 +283,7 @@ public class MetroGraph {
 	}
 
 	private void sortSilver() {
-		ArrayList<String> tempSilver = new ArrayList<>();
+		LinkedList<String> tempSilver = new LinkedList<>();
 		int x = silver.indexOf("Court House");
 
 		for (int i = silver.size() - 1; i >= x; i--) {
@@ -301,16 +303,6 @@ public class MetroGraph {
 		silver = tempSilver;
 	}
 
-	public int findStationIndex(String station) {
-		int index = 0;
-
-		while (index < stations.size() && !stations.get(index).equals(station)) {
-			index++;
-		}
-
-		return index;
-	}
-
 	public void sortStationLists() {
 		sortRed();
 		sortBlue();
@@ -319,222 +311,193 @@ public class MetroGraph {
 		sortGreen();
 		sortSilver();
 	}
-	
-	public void createNodeHelper(ArrayList<String> line) {
-		MetroNode temp;
 
-		for (int i = 0; i < line.size(); i++) {
-			if (metroNodeList.size() == 0 || findMetroNode(line.get(i)) == -1) {
-				temp = new MetroNode(line.get(i));
-				metroNodeList.add(temp);
-				if (!metroMap.containsKey(temp)) {
-					metroMap.put(temp, new LinkedList<>());
-				}
+	public void assignValues(int i1, int i2) {
+		adjacencyMatrix[i1][i2] = 1;
+		adjacencyMatrix[i2][i1] = 1;
+	}
+
+	// need to consider line color!!!
+	public MetroNode findNode(String name, String line) {
+		MetroNode tempNode;
+
+		for (int i = 0; i < stationList.size(); i++) {
+			tempNode = stationList.get(i);
+
+			if (tempNode.getName().equals(name) && tempNode.getLine().equals(line)) {
+				return stationList.get(i);
 			}
 		}
-	}
-	public void createMetroNodes() {
-		createNodeHelper(red);
-		createNodeHelper(blue);
-		createNodeHelper(yellow);
-		createNodeHelper(orange);
-		createNodeHelper(green);
-		createNodeHelper(silver);
-    }
-	
-	public int findMetroNode(String station) {
-		int index = 0;
-
-		while (index < metroNodeList.size() && !metroNodeList.get(index).station.equals(station)) {
-			index++;
-		}
-
-		if (index == metroNodeList.size()) {
-			return -1;
-		}
-
-		return index;
+		// will never reach this point
+		return null;
 	}
 
-	public void createMetroGraph() {
-		createMetroNodes();
+	public void createGraphHelper(LinkedList<String> lineList, String lineCode) {
 		MetroNode prevNode, curNode, nextNode;
 		int prevIndex, curIndex, nextIndex;
-		LinkedList<MetroNode> temp;
-		
-		for (int i = 0; i < red.size(); i++) {
-			curIndex = findMetroNode(red.get(i));
-			curNode = metroNodeList.get(curIndex);
-			temp = metroMap.get(curNode);
 
-			if (i != red.size() - 1) {
-				nextIndex = findMetroNode(red.get(i + 1));
-				nextNode = metroNodeList.get(nextIndex);
-				curNode.redNext = nextNode;
-				
-				if (!temp.contains(nextNode)) {
-					temp.add(nextNode);
-				}
+		for (int i = 0; i < lineList.size(); i++) {
+			curNode = findNode(lineList.get(i), lineCode);
+			curIndex = stationIndices.get(curNode);
+
+			if (i != lineList.size() - 1) {
+				nextNode = findNode(lineList.get(i + 1), lineCode);
+				nextIndex = stationIndices.get(nextNode);
+
+				// if (!curNode.getConnectingStations().contains(nextNode)) {
+				curNode.connectingStations.add(nextNode);
+				// }
+				// determine if this is needed
+				// curNode.redNext = nextNode;
+
+				assignValues(curIndex, nextIndex);
 			}
 			if (i != 0) {
-				prevIndex = findMetroNode(red.get(i - 1));
-				prevNode = metroNodeList.get(prevIndex);
-				curNode.redPrev = prevNode;
-				if (!temp.contains(prevNode)) {
-					temp.add(prevNode);
-				}
-			}
-		}
+				prevNode = findNode(lineList.get(i - 1), lineCode);
+				prevIndex = stationIndices.get(prevNode);
 
-		for (int i = 0; i < blue.size(); i++) {
-			curIndex = findMetroNode(blue.get(i));
-			curNode = metroNodeList.get(curIndex);
-			temp = metroMap.get(curNode);
+				// if (!curNode.getConnectingStations().contains(prevNode)) {
+				curNode.connectingStations.add(prevNode);
+				// }
+				// determine if this is needed
+				// curNode.redPrev = prevNode;
 
-			if (i != blue.size() - 1) {
-				nextIndex = findMetroNode(blue.get(i + 1));
-				nextNode = metroNodeList.get(nextIndex);
-				curNode.blueNext = nextNode;
-				
-				if (!temp.contains(nextNode)) {
-					temp.add(nextNode);
-				}
-			}
-			if (i != 0) {
-				prevIndex = findMetroNode(blue.get(i - 1));
-				prevNode = metroNodeList.get(prevIndex);
-				curNode.bluePrev = prevNode;
-				if (!temp.contains(prevNode)) {
-					temp.add(prevNode);
-				}
-			}
-		}
-
-		for (int i = 0; i < yellow.size(); i++) {
-			curIndex = findMetroNode(yellow.get(i));
-			curNode = metroNodeList.get(curIndex);
-			temp = metroMap.get(curNode);
-
-			if (i != yellow.size() - 1) {
-				nextIndex = findMetroNode(yellow.get(i + 1));
-				nextNode = metroNodeList.get(nextIndex);
-				curNode.yellowNext = nextNode;
-				
-				if (!temp.contains(nextNode)) {
-					temp.add(nextNode);
-				}
-			}
-			if (i != 0) {
-				prevIndex = findMetroNode(yellow.get(i - 1));
-				prevNode = metroNodeList.get(prevIndex);
-				curNode.yellowPrev = prevNode;
-				if (!temp.contains(prevNode)) {
-					temp.add(prevNode);
-				}
-			}
-		}
-
-		for (int i = 0; i < orange.size(); i++) {
-			curIndex = findMetroNode(orange.get(i));
-			curNode = metroNodeList.get(curIndex);
-			temp = metroMap.get(curNode);
-
-			if (i != orange.size() - 1) {
-				nextIndex = findMetroNode(orange.get(i + 1));
-				nextNode = metroNodeList.get(nextIndex);
-				curNode.orangeNext = nextNode;
-				
-				if (!temp.contains(nextNode)) {
-					temp.add(nextNode);
-				}
-			}
-			if (i != 0) {
-				prevIndex = findMetroNode(orange.get(i - 1));
-				prevNode = metroNodeList.get(prevIndex);
-				curNode.orangePrev = prevNode;
-				if (!temp.contains(prevNode)) {
-					temp.add(prevNode);
-				}
-			}
-		}
-
-		for (int i = 0; i < green.size(); i++) {
-			curIndex = findMetroNode(green.get(i));
-			curNode = metroNodeList.get(curIndex);
-			temp = metroMap.get(curNode);
-
-			if (i != green.size() - 1) {
-				nextIndex = findMetroNode(green.get(i + 1));
-				nextNode = metroNodeList.get(nextIndex);
-				curNode.greenNext = nextNode;
-				
-				if (!temp.contains(nextNode)) {
-					temp.add(nextNode);
-				}
-			}
-			if (i != 0) {
-				prevIndex = findMetroNode(green.get(i - 1));
-				prevNode = metroNodeList.get(prevIndex);
-				curNode.greenPrev = prevNode;
-				if (!temp.contains(prevNode)) {
-					temp.add(prevNode);
-				}
-			}
-		}
-
-		for (int i = 0; i < silver.size(); i++) {
-			curIndex = findMetroNode(silver.get(i));
-			curNode = metroNodeList.get(curIndex);
-			temp = metroMap.get(curNode);
-
-			if (i != silver.size() - 1) {
-				nextIndex = findMetroNode(silver.get(i + 1));
-				nextNode = metroNodeList.get(nextIndex);
-				curNode.silverNext = nextNode;
-				
-				if (!temp.contains(nextNode)) {
-					temp.add(nextNode);
-				}
-			}
-			if (i != 0) {
-				prevIndex = findMetroNode(silver.get(i - 1));
-				prevNode = metroNodeList.get(prevIndex);
-				curNode.silverPrev = prevNode;
-				if (!temp.contains(prevNode)) {
-					temp.add(prevNode);
-				}
+				assignValues(curIndex, prevIndex);
 			}
 		}
 	}
 
-	public LinkedList<MetroNode> getConnectedStations(String station) {
-        int index = findStationIndex(station);
+	/**
+	 * Assigns the previous and next fields for each line color for the MetroNodes
+	 */
+	public void createGraph() {
+		adjacencyMatrix = new int[stationList.size()][stationList.size()];
+		createGraphHelper(red, "RD");
+		createGraphHelper(blue, "BL");
+		createGraphHelper(yellow, "YL");
+		createGraphHelper(orange, "OR");
+		createGraphHelper(green, "GR");
+		createGraphHelper(silver, "SV");
+	}
 
-		return metroMap.get(metroNodeList.get(index));
-    }
+	/**
+	 * Assigns times between stations as weights to MetroEdges
+	 */
+	public void timeBetweenStations() {
+		try {
+			String wmataURL = "https://api.wmata.com/Rail.svc/json/jPath?FromStationCode=N06&ToStationCode=G05";
+			URL url = new URL(wmataURL);
+
+			HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+			connection.setRequestMethod("GET");
+			connection.setRequestProperty("api_key", WMATA_API_KEY);
+
+			int statusCode = connection.getResponseCode();
+
+			if (statusCode == 200) {
+				System.out.println("yay");
+
+				StringBuilder sb = new StringBuilder();
+				Scanner scan = new Scanner(url.openStream());
+
+				while (scan.hasNext()) {
+					sb.append(scan.nextLine() + " ");
+				}
+
+				sb.replace(sb.length() - 1, sb.length(), "");
+				scan.close();
+
+				JsonParser parser = new JsonParser();
+				JsonObject object = (JsonObject) parser.parse(sb.toString());
+				JsonArray stationsArray = object.getAsJsonArray("Stations");
+				// JsonObject obj;
+				// String tempName, tempColor, tempCode;
+				// LinkedList<String> tempColors;
+				// MetroNode tempNode;
+				// int index = 0;
+
+				for (int i = 0; i < stationsArray.size(); i++) {
+					// obj = stationsArray.get(i).getAsJsonObject();
+					// tempName = obj.get("Name").getAsString();
+					// tempColors = new LinkedList<>();
+					// tempColors.add(obj.get("LineCode1").getAsString());
+					// tempCode = obj.get("Code").getAsString();
+
+					// if (!obj.get("LineCode2").isJsonNull()) {
+					// tempColors.add(obj.get("LineCode2").getAsString());
+					// }
+					// if (!obj.get("LineCode3").isJsonNull()) {
+					// tempColors.add(obj.get("LineCode3").getAsString());
+					// }
+
+					// if (!stationIndices.containsKey(tempName)) {
+					// tempNode = new MetroNode(tempName, tempColors, tempCode, new LinkedList<>());
+					// stationList.add(tempNode);
+					// stationIndices.put(tempName, index);
+					// index++;
+					// }
+
+				}
+
+			} else {
+				System.out.println("Error: " + statusCode);
+			}
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	public void printMatrix() {
+		for (int[] a : adjacencyMatrix) {
+			for (int b : a) {
+				System.out.print(b + " ");
+			}
+			System.out.println();
+		}
+	}
+
+	public String toString() {
+		StringBuilder graph = new StringBuilder();
+
+		for (int i = 0; i < stationList.size(); i++) {
+			graph.append(stationList.get(i) + ": " + stationList.get(i).getConnectingStations() + "\n");
+		}
+
+		graph.replace(graph.length() - 1, graph.length(), "");
+
+		return graph.toString();
+	}
 
 	/**
 	 * Main method for testing.
+	 * 
 	 * @param args cla - not needed
 	 */
 	public static void main(String[] args) {
-		MetroGraph metroStations = new MetroGraph();
-		ArrayList<String> stations = metroStations.stations;
-		// System.out.println(metroStations.stations);		
-		// System.out.println(metroStations.lineMap);
-		List<MetroNode> nodeList = metroStations.metroNodeList;
-		Map<MetroNode, LinkedList<MetroNode>> map = metroStations.metroMap;
-		// System.out.println(map);
-		// System.out.println(map.size());
-		int index = metroStations.findMetroNode("Metro Center");
-		MetroNode node = nodeList.get(index);
-		System.out.println(node.redPrev);
-		// System.out.println(node.redNext);
-		System.out.println(node.yellowPrev);
-		
-		
-		// System.out.println(stations.get(97));
-		// System.out.println(metroStations.getConnectedStations(stations.get(97)));
+		/**
+		 * Initialize a MetroGraph object and set the graph up
+		 */
+		MetroGraph metroGraph = new MetroGraph();
+		metroGraph.retrieveStations();
+		metroGraph.createStationLists();
+		metroGraph.sortStationLists();
+		metroGraph.createGraph();
+
+		// System.out.println(metroGraph.stationIndices);
+		System.out.println(metroGraph); // essentially an adjacency list but with better readability
+		/**
+		 * Testing methods
+		 */
+		// metroGraph.printMatrix();
+
+		// metroGraph.timeBetweenStations();
+		// System.out.println(metroGraph.stationList); //list of all stations as
+		// MetroNode objects
+		// System.out.println("____________________________");
+		// System.out.println(metroGraph.stationIndices); //HashMap of indices and their
+		// respective stations for adjacency matrix
+		// metroGraph.printMatrix(); // correct
+
 	}
 }
-
